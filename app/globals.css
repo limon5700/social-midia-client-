@@ -1,0 +1,337 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  body {
+    @apply bg-gray-100 text-gray-900 font-sans overflow-x-hidden;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  body.comment-modal-open nav[aria-label='Mobile navigation'],
+  body.create-post-open nav[aria-label='Mobile navigation'] {
+    display: none;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-social-blue hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .card {
+    @apply bg-white rounded-xl shadow-soft border border-gray-100 w-full min-w-0 max-w-full;
+  }
+
+  .feed-card {
+    @apply bg-white w-full min-w-0 max-w-full overflow-hidden p-3 sm:p-5 md:p-6;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200;
+  }
+  
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors duration-200 cursor-pointer;
+  }
+  
+  .nav-item.active {
+    @apply bg-primary-50 text-primary-600 font-medium;
+  }
+  
+  .post-card {
+    @apply feed-card animate-fade-in;
+  }
+  
+  .reel-card {
+    @apply relative h-[600px] w-full max-w-sm mx-auto bg-black rounded-xl overflow-hidden;
+  }
+  
+  .mobile-nav-item {
+    @apply flex flex-col items-center gap-1 py-2 px-3 rounded-lg transition-colors duration-200;
+  }
+  
+  .mobile-nav-item.active {
+    @apply text-primary-600;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* Video autoplay styles */
+video {
+  @apply w-full h-full object-cover;
+}
+
+/* Loading animation */
+.loading-spinner {
+  @apply animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500;
+}
+
+/* Like button animation */
+.like-button:active {
+  transform: scale(0.95);
+}
+
+/* Story/reel progress bar */
+.progress-bar {
+  @apply h-1 bg-gray-200 rounded-full overflow-hidden;
+}
+
+.progress-fill {
+  @apply h-full bg-white transition-all duration-300 ease-linear;
+}
+
+/* Custom scrollbar hiding */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Line clamp utility */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Masonry grid break-inside */
+.break-inside-avoid {
+  break-inside: avoid;
+}
+
+/* Reels specific styles */
+.reel-container {
+  scroll-snap-type: y mandatory;
+}
+
+.reel-item {
+  scroll-snap-align: start;
+}
+
+/* Smooth video transitions */
+video {
+  transition: opacity 0.3s ease-in-out;
+}
+
+/* Touch-friendly buttons */
+.reel-button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Message bubbles */
+.message-bubble {
+  max-width: 60%;
+  word-wrap: break-word;
+}
+
+.message-bubble-own {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.message-bubble-other {
+  background: #f3f4f6;
+}
+
+/* Typing indicator animation */
+.typing-dot {
+  animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Message input auto-resize */
+.message-input {
+  resize: none;
+  overflow: hidden;
+}
+
+/* Conversation hover effects */
+.conversation-item:hover {
+  background-color: #f9fafb;
+  transition: background-color 0.2s ease;
+}
+
+/* Online status indicator */
+.online-indicator {
+  box-shadow: 0 0 0 2px white;
+}
+
+/* Unread message indicator */
+.unread-indicator {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Friend card hover effects */
+.friend-card {
+  transition: all 0.3s ease;
+}
+
+.friend-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Profile image hover effect */
+.profile-image {
+  transition: transform 0.3s ease;
+}
+
+.friend-card:hover .profile-image {
+  transform: scale(1.05);
+}
+
+/* Action button animations */
+.action-button {
+  transition: all 0.2s ease;
+}
+
+.action-button:hover {
+  transform: translateY(-1px);
+}
+
+.action-button:active {
+  transform: translateY(0);
+}
+
+/* Tab indicator animation */
+.tab-indicator {
+  transition: all 0.3s ease;
+}
+
+/* Search input focus effect */
+.search-input:focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Grid layout responsive adjustments */
+.friends-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .friends-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .friends-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .friends-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* List layout styling */
+.friends-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Online status glow effect */
+.online-status {
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #10b981;
+}
+
+/* Verification badge styling */
+.verification-badge {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+/* Empty state styling */
+.empty-state {
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border: 2px dashed #cbd5e1;
+}
+
+/* Loading skeleton animation */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+} 

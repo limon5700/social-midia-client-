@@ -1,0 +1,216 @@
+'use client'
+
+import { useState } from 'react'
+import {
+  Shield,
+  EyeOff,
+  Lock,
+  Globe,
+  Users,
+  UserX,
+  Search,
+  Download,
+} from 'lucide-react'
+import { users } from '@/data/mockData'
+import { cn } from '@/lib/utils'
+
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+        checked ? 'bg-primary-500' : 'bg-gray-200'
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+          checked ? 'translate-x-6' : 'translate-x-1'
+        )}
+      />
+    </button>
+  )
+}
+
+function Row({
+  label,
+  description,
+  children,
+}: {
+  label: string
+  description: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-b border-gray-100 py-5 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 flex-1">
+        <h3 className="font-medium text-gray-900">{label}</h3>
+        <p className="mt-1 text-sm text-gray-500">{description}</p>
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  )
+}
+
+function Card({ title, icon: Icon, children }: { title: string; icon: typeof Shield; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
+        <Icon className="h-6 w-6 text-primary-600" />
+        <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+      </div>
+      <div className="px-6">{children}</div>
+    </div>
+  )
+}
+
+export function PrivacySecurityHub() {
+  const [privateAccount, setPrivateAccount] = useState(false)
+  const [showActivity, setShowActivity] = useState(true)
+  const [showOnlineStatus, setShowOnlineStatus] = useState(true)
+  const [allowTagging, setAllowTagging] = useState(true)
+  const [allowMessages, setAllowMessages] = useState(true)
+  const [searchIndexing, setSearchIndexing] = useState(false)
+  const [locationSharing, setLocationSharing] = useState(false)
+  const [profileVisibility, setProfileVisibility] = useState('public')
+  const [messageFrom, setMessageFrom] = useState('everyone')
+  const [blockedSearch, setBlockedSearch] = useState('')
+
+  const blockedUsers = users.slice(0, 2)
+  const filteredBlocked = blockedUsers.filter(
+    (u) =>
+      u.name.toLowerCase().includes(blockedSearch.toLowerCase()) ||
+      u.username.toLowerCase().includes(blockedSearch.toLowerCase())
+  )
+
+  return (
+    <div className="space-y-6">
+      <Card title="Privacy & Security" icon={Shield}>
+        <Row label="Private account" description="Only approved followers can see your posts and profile.">
+          <ToggleSwitch checked={privateAccount} onChange={setPrivateAccount} />
+        </Row>
+
+        <Row label="Profile visibility" description="Who can view your full profile.">
+          <select
+            value={profileVisibility}
+            onChange={(e) => setProfileVisibility(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="public">Public</option>
+            <option value="friends">Friends only</option>
+            <option value="private">Only me</option>
+          </select>
+        </Row>
+
+        <Row label="Who can message you" description="Control incoming direct messages.">
+          <select
+            value={messageFrom}
+            onChange={(e) => setMessageFrom(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="everyone">Everyone</option>
+            <option value="friends">Friends only</option>
+            <option value="nobody">Nobody</option>
+          </select>
+        </Row>
+
+        <Row label="Allow tagging" description="Let others tag you in posts and comments.">
+          <ToggleSwitch checked={allowTagging} onChange={setAllowTagging} />
+        </Row>
+
+        <Row label="Message requests" description="Receive messages from people you do not follow.">
+          <ToggleSwitch checked={allowMessages} onChange={setAllowMessages} />
+        </Row>
+
+        <Row label="Activity status" description="Show when you were last active on the platform.">
+          <ToggleSwitch checked={showActivity} onChange={setShowActivity} />
+        </Row>
+
+        <Row label="Online status" description="Show a green dot when you are online.">
+          <ToggleSwitch checked={showOnlineStatus} onChange={setShowOnlineStatus} />
+        </Row>
+
+        <Row label="Location in posts" description="Attach location data when you create new posts.">
+          <ToggleSwitch checked={locationSharing} onChange={setLocationSharing} />
+        </Row>
+
+        <Row label="Search engine indexing" description="Allow search engines to link to your public profile.">
+          <ToggleSwitch checked={searchIndexing} onChange={setSearchIndexing} />
+        </Row>
+      </Card>
+
+      <Card title="Blocked accounts" icon={UserX}>
+        <div className="py-4">
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={blockedSearch}
+              onChange={(e) => setBlockedSearch(e.target.value)}
+              placeholder="Search blocked users..."
+              className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3 text-sm focus:border-transparent focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          {filteredBlocked.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-500">No blocked accounts match your search.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {filteredBlocked.map((user) => (
+                <li key={user.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <img src={user.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900">{user.name}</p>
+                      <p className="truncate text-sm text-gray-500">@{user.username}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Unblock
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Card>
+
+      <Card title="Your data" icon={Download}>
+        <Row label="Download your data" description="Get a copy of your posts, messages, and profile information.">
+          <button
+            type="button"
+            className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
+          >
+            Request download
+          </button>
+        </Row>
+      </Card>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { icon: Globe, label: 'Public posts', on: profileVisibility === 'public' },
+          { icon: Users, label: 'Friends', on: profileVisibility === 'friends' },
+          { icon: Lock, label: 'Private mode', on: privateAccount },
+          { icon: EyeOff, label: 'Hidden activity', on: !showActivity },
+        ].map(({ icon: Icon, label, on }) => (
+          <div
+            key={label}
+            className={cn(
+              'flex flex-col items-center rounded-lg border p-3 text-center text-xs',
+              on ? 'border-primary-200 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-500'
+            )}
+          >
+            <Icon className="mb-1 h-5 w-5" />
+            {label}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
