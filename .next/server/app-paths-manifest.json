@@ -1,9 +1,0 @@
-{
-  "/not-found": "app/not-found.js",
-  "/page": "app/page.js",
-  "/activity/page": "app/activity/page.js",
-  "/profile/account/page": "app/profile/account/page.js",
-  "/settings/page": "app/settings/page.js",
-  "/notifications/page": "app/notifications/page.js",
-  "/reels/page": "app/reels/page.js"
-}
