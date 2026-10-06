@@ -28,13 +28,13 @@ interface UserSearchResult {
 interface CreatePostPeopleAndStyleProps {
   content: string
   onContentChange: (value: string) => void
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  textareaRef: React.RefObject<HTMLTextAreaElement>
   taggedUsers: PostTaggedUser[]
   onTaggedUsersChange: (users: PostTaggedUser[]) => void
   hasMedia: boolean
   backgroundStyle: PostBackgroundStyle | null
   onBackgroundChange: (style: PostBackgroundStyle | null) => void
-  headerActionsRef?: React.RefObject<HTMLDivElement | null>
+  headerActionsRef?: React.RefObject<HTMLDivElement>
 }
 
 async function searchUsers(query: string): Promise<UserSearchResult[]> {
