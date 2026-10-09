@@ -45,9 +45,15 @@ interface CommentSectionProps {
   postId: string
   initialComments?: Comment[]
   fullScreen?: boolean
+  onCommentAdded?: () => void
 }
 
-export default function CommentSection({ postId, initialComments = [], fullScreen = false }: CommentSectionProps) {
+export default function CommentSection({
+  postId,
+  initialComments = [],
+  fullScreen = false,
+  onCommentAdded,
+}: CommentSectionProps) {
   const { user, isAuthenticated } = useAuth()
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState('')
@@ -131,6 +137,7 @@ export default function CommentSection({ postId, initialComments = [], fullScree
       if (data.success) {
         // Add new comment to the beginning of the list
         setComments(prevComments => [data.data.comment, ...prevComments])
+        onCommentAdded?.()
         setNewComment('')
         if (commentInputRef.current) {
           commentInputRef.current.style.height = 'auto'

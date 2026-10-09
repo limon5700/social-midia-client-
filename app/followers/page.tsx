@@ -204,8 +204,22 @@ export default function FollowersPage() {
     console.log('Remove follower:', userId)
   }
 
-  const handleBlock = (userId: string) => {
-    console.log('Block user:', userId)
+  const handleBlock = async (userId: string) => {
+    try {
+      const res = await fetch(`/api/users/${userId}/block`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = await res.json()
+      if (data.success) {
+        alert('User blocked. They will appear under Settings → Privacy → Blocked accounts.')
+      } else {
+        alert(data.message || 'Failed to block user')
+      }
+    } catch (err) {
+      console.error('Block user error:', err)
+      alert('Failed to block user')
+    }
   }
 
   const isOnline = (lastActive?: Date) => {

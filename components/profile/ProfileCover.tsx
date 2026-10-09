@@ -7,6 +7,7 @@ interface ProfileCoverProps {
   coverPhoto?: string
   avatar: string
   name: string
+  username?: string
   canEdit?: boolean
   uploadingCover?: boolean
   onCoverChange?: (file: File) => void
@@ -17,6 +18,7 @@ export default function ProfileCover({
   coverPhoto,
   avatar,
   name,
+  username,
   canEdit = false,
   uploadingCover = false,
   onCoverChange,
@@ -83,25 +85,36 @@ export default function ProfileCover({
         )}
       </div>
 
-      {/* Avatar overlapping cover */}
+      {/* Avatar + name/username beside it */}
       <div className="max-w-4xl mx-auto px-3 sm:px-4">
-        <div className="relative -mt-12 sm:-mt-14 md:-mt-16 mb-4">
-          <div className="relative inline-block">
-            <img
-              src={avatar}
-              alt={name}
-              className="h-24 w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 rounded-full object-cover border-4 border-white shadow-lg bg-white"
-            />
-            {canEdit && onAvatarClick && (
-              <button
-                type="button"
-                onClick={onAvatarClick}
-                className="absolute bottom-1 right-1 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md"
-                aria-label="Change profile photo"
-              >
-                <Camera className="h-4 w-4" />
-              </button>
-            )}
+        <div className="relative -mt-12 sm:-mt-14 md:-mt-16 mb-3 sm:mb-4">
+          <div className="flex items-end gap-3 sm:gap-4">
+            <div className="relative inline-block shrink-0">
+              <img
+                src={avatar}
+                alt={name}
+                className="h-24 w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 rounded-full object-cover border-4 border-white shadow-lg bg-white"
+              />
+              {canEdit && onAvatarClick && (
+                <button
+                  type="button"
+                  onClick={onAvatarClick}
+                  className="absolute bottom-1 right-1 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md"
+                  aria-label="Change profile photo"
+                >
+                  <Camera className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1 pb-1 sm:pb-2">
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 truncate leading-tight">
+                {name}
+              </h1>
+              {username && (
+                <p className="text-sm sm:text-base text-gray-600 truncate">@{username}</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

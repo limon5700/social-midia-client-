@@ -10,6 +10,7 @@ interface CommentModalProps {
   onClose: () => void
   postId: string
   commentCount?: number
+  onCommentAdded?: () => void
 }
 
 export default function CommentModal({
@@ -17,6 +18,7 @@ export default function CommentModal({
   onClose,
   postId,
   commentCount,
+  onCommentAdded,
 }: CommentModalProps) {
   const [mounted, setMounted] = useState(false)
 
@@ -66,7 +68,11 @@ export default function CommentModal({
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        <CommentSection postId={postId} fullScreen />
+        <CommentSection
+          postId={postId}
+          fullScreen
+          onCommentAdded={onCommentAdded}
+        />
       </div>
     </div>,
     document.body,

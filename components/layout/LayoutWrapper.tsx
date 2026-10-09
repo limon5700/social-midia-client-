@@ -20,10 +20,13 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const [refreshKey, setRefreshKey] = useState(0)
   const isAuthPage = pathname === '/auth'
   const isFeedPage = pathname === '/'
+  const isMessagesPage = pathname === '/messages'
+  const isReelsPage = pathname === '/reels'
 
   const shouldShowNavigation = isAuthenticated && !isAuthPage
   const shouldShowSidebar = shouldShowNavigation && isFeedPage
-  const pullRefreshEnabled = isAuthenticated && !authLoading && !isAuthPage
+  const pullRefreshEnabled =
+    isAuthenticated && !authLoading && !isAuthPage && !isMessagesPage && !isReelsPage
 
   const handlePullRefresh = useCallback(async () => {
     window.dispatchEvent(new CustomEvent(PULL_REFRESH_EVENT))
@@ -33,7 +36,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   }, [router])
 
   const mainContent = (
-    <div key={refreshKey} className="min-h-full w-full min-w-0">
+    <div key={refreshKey} className="min-h-full w-full min-w-0 h-full">
       {children}
     </div>
   )
@@ -41,9 +44,13 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const mainClassName =
     isAuthPage || !isAuthenticated
       ? 'w-full min-w-0 max-w-full overflow-x-hidden bg-white min-h-screen'
-      : shouldShowSidebar
-        ? 'w-full min-w-0 max-w-full overflow-x-hidden bg-gray-100 min-h-screen pt-14 sm:pt-16 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-8 lg:ml-16'
-        : 'w-full min-w-0 max-w-full overflow-x-hidden bg-gray-100 min-h-screen pt-14 sm:pt-16 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-8'
+      : isMessagesPage
+        ? 'w-full min-w-0 max-w-full overflow-x-hidden bg-white pt-14 sm:pt-16 pb-0 lg:pb-0 h-[100dvh] overflow-hidden'
+        : isReelsPage
+          ? 'w-full min-w-0 max-w-full overflow-x-hidden bg-black pt-14 sm:pt-16 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0 h-[100dvh] overflow-hidden'
+          : shouldShowSidebar
+            ? 'w-full min-w-0 max-w-full overflow-x-hidden bg-gray-100 min-h-screen pt-14 sm:pt-16 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-8 lg:ml-16'
+            : 'w-full min-w-0 max-w-full overflow-x-hidden bg-gray-100 min-h-screen pt-14 sm:pt-16 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-8'
 
   return (
     <>

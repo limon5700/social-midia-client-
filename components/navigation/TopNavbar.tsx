@@ -1,11 +1,55 @@
 'use client'
-import { useState } from 'react'
+
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Search, Bell, MessageCircle, Settings } from 'lucide-react'
 import SearchModal from '@/components/modals/SearchModal'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function TopNavbar() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [unreadMessages, setUnreadMessages] = useState(0)
+  const { isAuthenticated } = useAuth()
+
+  const loadUnread = useCallback(async () => {
+    if (!isAuthenticated) {
+      setUnreadNotifications(0)
+      setUnreadMessages(0)
+      return
+    }
+
+    try {
+      const [notifRes, msgRes] = await Promise.all([
+        fetch('/api/notifications/unread-count'),
+        fetch('/api/messages?type=direct&limit=20'),
+      ])
+
+      const notifData = await notifRes.json()
+      if (notifData.success) {
+        setUnreadNotifications(Number(notifData.data?.total || 0))
+      }
+
+      const msgData = await msgRes.json()
+      if (msgData.success) {
+        const conversations = msgData.data?.conversations || []
+        const totalUnread = conversations.reduce(
+          (sum: number, c: { unreadCount?: number }) => sum + Number(c.unreadCount || 0),
+          0,
+        )
+        setUnreadMessages(totalUnread)
+      }
+    } catch {
+      /* silent */
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    loadUnread()
+    if (!isAuthenticated) return
+    const interval = setInterval(loadUnread, 20000)
+    return () => clearInterval(interval)
+  }, [isAuthenticated, loadUnread])
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 safe-top">
@@ -49,9 +93,11 @@ export default function TopNavbar() {
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                3
-              </span>
+              {unreadNotifications > 0 && (
+                <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-0.5 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                </span>
+              )}
             </Link>
 
             <Link
@@ -60,9 +106,11 @@ export default function TopNavbar() {
               aria-label="Messages"
             >
               <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                2
-              </span>
+              {unreadMessages > 0 && (
+                <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-0.5 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  {unreadMessages > 9 ? '9+' : unreadMessages}
+                </span>
+              )}
             </Link>
 
             <Link

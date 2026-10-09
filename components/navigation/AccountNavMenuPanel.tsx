@@ -3,17 +3,11 @@
 import Link from 'next/link'
 import type { LucideIcon } from 'lucide-react'
 import {
-  User,
-  Bell,
   Activity,
   Archive,
-  FileText,
-  FolderOpen,
   Clock,
   Flag,
-  Gift,
   Settings,
-  Shield,
   FileCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -21,20 +15,14 @@ import { cn } from '@/lib/utils'
 export type AccountNavItem = { icon: LucideIcon; label: string; href: string }
 
 export const PROFILE_ACCOUNT_NAV_ITEMS: AccountNavItem[] = [
-  { icon: User, label: 'Profile', href: '/profile' },
-  { icon: Bell, label: 'Notifications', href: '/notifications' },
   { icon: Activity, label: 'Activity Log', href: '/activity' },
   { icon: Archive, label: 'Archived Posts', href: '/archived' },
-  { icon: FileText, label: 'Drafts', href: '/drafts' },
-  { icon: FolderOpen, label: 'Collections', href: '/collections' },
   { icon: Clock, label: 'Saved', href: '/saved' },
   { icon: Flag, label: 'Reports', href: '/reports' },
-  { icon: Gift, label: 'Referrals', href: '/referrals' },
 ]
 
 export const SETTINGS_ACCOUNT_NAV_ITEMS: AccountNavItem[] = [
   { icon: Settings, label: 'Settings', href: '/settings' },
-  { icon: Shield, label: 'Privacy & Security', href: '/settings?tab=privacy' },
   { icon: FileCheck, label: 'Terms & Privacy', href: '/legal' },
 ]
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Shield,
   EyeOff,
@@ -10,26 +10,67 @@ import {
   UserX,
   Search,
   Download,
+  Loader2,
 } from 'lucide-react'
-import { users } from '@/data/mockData'
 import { cn } from '@/lib/utils'
 
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+interface BlockedUser {
+  id: string
+  name: string
+  username: string
+  avatar: string
+  isVerified?: boolean
+}
+
+interface PrivacyState {
+  privateAccount: boolean
+  profileVisibility: string
+  messageFrom: string
+  allowTagging: boolean
+  messageRequests: boolean
+  showActivity: boolean
+  showOnlineStatus: boolean
+  locationSharing: boolean
+  searchIndexing: boolean
+}
+
+const DEFAULT_STATE: PrivacyState = {
+  privateAccount: false,
+  profileVisibility: 'public',
+  messageFrom: 'everyone',
+  allowTagging: true,
+  messageRequests: true,
+  showActivity: true,
+  showOnlineStatus: true,
+  locationSharing: false,
+  searchIndexing: false,
+}
+
+function ToggleSwitch({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-        checked ? 'bg-primary-500' : 'bg-gray-200'
+        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50',
+        checked ? 'bg-primary-500' : 'bg-gray-200',
       )}
     >
       <span
         className={cn(
           'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-          checked ? 'translate-x-6' : 'translate-x-1'
+          checked ? 'translate-x-6' : 'translate-x-1',
         )}
       />
     </button>
@@ -56,7 +97,15 @@ function Row({
   )
 }
 
-function Card({ title, icon: Icon, children }: { title: string; icon: typeof Shield; children: React.ReactNode }) {
+function Card({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string
+  icon: typeof Shield
+  children: React.ReactNode
+}) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
@@ -69,36 +118,156 @@ function Card({ title, icon: Icon, children }: { title: string; icon: typeof Shi
 }
 
 export function PrivacySecurityHub() {
-  const [privateAccount, setPrivateAccount] = useState(false)
-  const [showActivity, setShowActivity] = useState(true)
-  const [showOnlineStatus, setShowOnlineStatus] = useState(true)
-  const [allowTagging, setAllowTagging] = useState(true)
-  const [allowMessages, setAllowMessages] = useState(true)
-  const [searchIndexing, setSearchIndexing] = useState(false)
-  const [locationSharing, setLocationSharing] = useState(false)
-  const [profileVisibility, setProfileVisibility] = useState('public')
-  const [messageFrom, setMessageFrom] = useState('everyone')
+  const [settings, setSettings] = useState<PrivacyState>(DEFAULT_STATE)
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([])
   const [blockedSearch, setBlockedSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [saveMessage, setSaveMessage] = useState('')
 
-  const blockedUsers = users.slice(0, 2)
+  const loadSettings = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/settings/privacy', { credentials: 'include' })
+      const data = await res.json()
+      if (!data.success) {
+        setError(data.message || 'Failed to load privacy settings')
+        return
+      }
+      const d = data.data
+      setSettings({
+        privateAccount: Boolean(d.privateAccount),
+        profileVisibility: d.profileVisibility || 'public',
+        messageFrom: d.messageFrom || 'everyone',
+        allowTagging: Boolean(d.allowTagging),
+        messageRequests: Boolean(d.messageRequests),
+        showActivity: Boolean(d.showActivity),
+        showOnlineStatus: Boolean(d.showOnlineStatus),
+        locationSharing: Boolean(d.locationSharing),
+        searchIndexing: Boolean(d.searchIndexing),
+      })
+      setBlockedUsers(d.blockedUsers || [])
+    } catch (err) {
+      console.error(err)
+      setError('Failed to load privacy settings')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadSettings()
+  }, [loadSettings])
+
+  const persist = async (patch: Partial<PrivacyState>) => {
+    const next = { ...settings, ...patch }
+    setSettings(next)
+    setSaving(true)
+    setSaveMessage('')
+    setError('')
+    try {
+      const res = await fetch('/api/settings/privacy', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      })
+      const data = await res.json()
+      if (!data.success) {
+        setError(data.message || 'Failed to save')
+        await loadSettings()
+        return
+      }
+      const d = data.data
+      setSettings({
+        privateAccount: Boolean(d.privateAccount),
+        profileVisibility: d.profileVisibility || next.profileVisibility,
+        messageFrom: d.messageFrom || next.messageFrom,
+        allowTagging: Boolean(d.allowTagging),
+        messageRequests: Boolean(d.messageRequests),
+        showActivity: Boolean(d.showActivity),
+        showOnlineStatus: Boolean(d.showOnlineStatus),
+        locationSharing: Boolean(d.locationSharing),
+        searchIndexing: Boolean(d.searchIndexing),
+      })
+      setSaveMessage('Saved')
+      setTimeout(() => setSaveMessage(''), 1500)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to save privacy settings')
+      await loadSettings()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUnblock = async (userId: string) => {
+    try {
+      const res = await fetch(`/api/users/${userId}/block`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      const data = await res.json()
+      if (data.success) {
+        setBlockedUsers((prev) => prev.filter((u) => u.id !== userId))
+      } else {
+        setError(data.message || 'Failed to unblock')
+      }
+    } catch (err) {
+      console.error(err)
+      setError('Failed to unblock user')
+    }
+  }
+
   const filteredBlocked = blockedUsers.filter(
     (u) =>
       u.name.toLowerCase().includes(blockedSearch.toLowerCase()) ||
-      u.username.toLowerCase().includes(blockedSearch.toLowerCase())
+      u.username.toLowerCase().includes(blockedSearch.toLowerCase()),
   )
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
+      {(error || saveMessage || saving) && (
+        <div
+          className={cn(
+            'rounded-lg border px-4 py-2 text-sm',
+            error
+              ? 'border-red-200 bg-red-50 text-red-700'
+              : 'border-green-200 bg-green-50 text-green-700',
+          )}
+        >
+          {error || (saving ? 'Saving…' : saveMessage)}
+        </div>
+      )}
+
       <Card title="Privacy & Security" icon={Shield}>
-        <Row label="Private account" description="Only approved followers can see your posts and profile.">
-          <ToggleSwitch checked={privateAccount} onChange={setPrivateAccount} />
+        <Row
+          label="Private account"
+          description="Only approved followers can see your posts and profile."
+        >
+          <ToggleSwitch
+            checked={settings.privateAccount}
+            disabled={saving}
+            onChange={(v) => persist({ privateAccount: v })}
+          />
         </Row>
 
         <Row label="Profile visibility" description="Who can view your full profile.">
           <select
-            value={profileVisibility}
-            onChange={(e) => setProfileVisibility(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-primary-500"
+            value={settings.profileVisibility}
+            disabled={saving}
+            onChange={(e) => persist({ profileVisibility: e.target.value })}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
             <option value="public">Public</option>
             <option value="friends">Friends only</option>
@@ -108,9 +277,10 @@ export function PrivacySecurityHub() {
 
         <Row label="Who can message you" description="Control incoming direct messages.">
           <select
-            value={messageFrom}
-            onChange={(e) => setMessageFrom(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-primary-500"
+            value={settings.messageFrom}
+            disabled={saving}
+            onChange={(e) => persist({ messageFrom: e.target.value })}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
             <option value="everyone">Everyone</option>
             <option value="friends">Friends only</option>
@@ -119,27 +289,63 @@ export function PrivacySecurityHub() {
         </Row>
 
         <Row label="Allow tagging" description="Let others tag you in posts and comments.">
-          <ToggleSwitch checked={allowTagging} onChange={setAllowTagging} />
+          <ToggleSwitch
+            checked={settings.allowTagging}
+            disabled={saving}
+            onChange={(v) => persist({ allowTagging: v })}
+          />
         </Row>
 
-        <Row label="Message requests" description="Receive messages from people you do not follow.">
-          <ToggleSwitch checked={allowMessages} onChange={setAllowMessages} />
+        <Row
+          label="Message requests"
+          description="Receive messages from people you do not follow."
+        >
+          <ToggleSwitch
+            checked={settings.messageRequests}
+            disabled={saving}
+            onChange={(v) => persist({ messageRequests: v })}
+          />
         </Row>
 
-        <Row label="Activity status" description="Show when you were last active on the platform.">
-          <ToggleSwitch checked={showActivity} onChange={setShowActivity} />
+        <Row
+          label="Activity status"
+          description="Show when you were last active on the platform."
+        >
+          <ToggleSwitch
+            checked={settings.showActivity}
+            disabled={saving}
+            onChange={(v) => persist({ showActivity: v })}
+          />
         </Row>
 
         <Row label="Online status" description="Show a green dot when you are online.">
-          <ToggleSwitch checked={showOnlineStatus} onChange={setShowOnlineStatus} />
+          <ToggleSwitch
+            checked={settings.showOnlineStatus}
+            disabled={saving}
+            onChange={(v) => persist({ showOnlineStatus: v })}
+          />
         </Row>
 
-        <Row label="Location in posts" description="Attach location data when you create new posts.">
-          <ToggleSwitch checked={locationSharing} onChange={setLocationSharing} />
+        <Row
+          label="Location in posts"
+          description="Attach location data when you create new posts."
+        >
+          <ToggleSwitch
+            checked={settings.locationSharing}
+            disabled={saving}
+            onChange={(v) => persist({ locationSharing: v })}
+          />
         </Row>
 
-        <Row label="Search engine indexing" description="Allow search engines to link to your public profile.">
-          <ToggleSwitch checked={searchIndexing} onChange={setSearchIndexing} />
+        <Row
+          label="Search engine indexing"
+          description="Allow search engines to link to your public profile."
+        >
+          <ToggleSwitch
+            checked={settings.searchIndexing}
+            disabled={saving}
+            onChange={(v) => persist({ searchIndexing: v })}
+          />
         </Row>
       </Card>
 
@@ -156,13 +362,21 @@ export function PrivacySecurityHub() {
             />
           </div>
           {filteredBlocked.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-500">No blocked accounts match your search.</p>
+            <p className="py-6 text-center text-sm text-gray-500">
+              {blockedUsers.length === 0
+                ? 'You have not blocked anyone yet.'
+                : 'No blocked accounts match your search.'}
+            </p>
           ) : (
             <ul className="divide-y divide-gray-100">
               {filteredBlocked.map((user) => (
                 <li key={user.id} className="flex items-center justify-between gap-3 py-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <img src={user.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+                    <img
+                      src={user.avatar || '/images/default-avatar.svg'}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-full object-cover"
+                    />
                     <div className="min-w-0">
                       <p className="truncate font-medium text-gray-900">{user.name}</p>
                       <p className="truncate text-sm text-gray-500">@{user.username}</p>
@@ -170,6 +384,7 @@ export function PrivacySecurityHub() {
                   </div>
                   <button
                     type="button"
+                    onClick={() => handleUnblock(user.id)}
                     className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Unblock
@@ -182,9 +397,15 @@ export function PrivacySecurityHub() {
       </Card>
 
       <Card title="Your data" icon={Download}>
-        <Row label="Download your data" description="Get a copy of your posts, messages, and profile information.">
+        <Row
+          label="Download your data"
+          description="Get a copy of your posts, messages, and profile information."
+        >
           <button
             type="button"
+            onClick={() =>
+              setSaveMessage('Data download will be available soon. Your settings are already saved.')
+            }
             className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
           >
             Request download
@@ -194,16 +415,18 @@ export function PrivacySecurityHub() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { icon: Globe, label: 'Public posts', on: profileVisibility === 'public' },
-          { icon: Users, label: 'Friends', on: profileVisibility === 'friends' },
-          { icon: Lock, label: 'Private mode', on: privateAccount },
-          { icon: EyeOff, label: 'Hidden activity', on: !showActivity },
+          { icon: Globe, label: 'Public posts', on: settings.profileVisibility === 'public' },
+          { icon: Users, label: 'Friends', on: settings.profileVisibility === 'friends' },
+          { icon: Lock, label: 'Private mode', on: settings.privateAccount },
+          { icon: EyeOff, label: 'Hidden activity', on: !settings.showActivity },
         ].map(({ icon: Icon, label, on }) => (
           <div
             key={label}
             className={cn(
               'flex flex-col items-center rounded-lg border p-3 text-center text-xs',
-              on ? 'border-primary-200 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-500'
+              on
+                ? 'border-primary-200 bg-primary-50 text-primary-800'
+                : 'border-gray-200 bg-white text-gray-500',
             )}
           >
             <Icon className="mb-1 h-5 w-5" />

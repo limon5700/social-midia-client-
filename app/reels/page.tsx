@@ -1,314 +1,242 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Heart, MessageCircle, Share2, Music, Play, Pause, Volume2, VolumeX, MoreHorizontal } from 'lucide-react'
-import { reels } from '@/data/mockData'
-import { formatNumber, formatTimeAgo } from '@/lib/utils'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Video } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { Post } from '@/types'
+import ReelCard from '@/components/reels/ReelCard'
+import CommentModal from '@/components/comments/CommentModal'
 
 export default function ReelsPage() {
-  const [currentReelIndex, setCurrentReelIndex] = useState(0)
-  const [isLoading, setIsLoading] = useState(false)
-  const [touchStart, setTouchStart] = useState(0)
-  const [touchEnd, setTouchEnd] = useState(0)
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const [reels, setReels] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([])
 
-  const handleNextReel = () => {
-    if (currentReelIndex < reels.length - 1) {
-      setCurrentReelIndex(prev => prev + 1)
+  const fetchReels = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError('')
+      const response = await fetch('/api/posts?limit=30&mediaType=video', {
+        credentials: 'include',
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        const videoPosts = (data.data.posts as Post[]).filter((post) =>
+          post.media?.some((m) => m.type === 'video' && m.url),
+        )
+        setReels(videoPosts)
+        setActiveIndex(0)
+      } else {
+        setError(data.message || 'Failed to load reels')
+      }
+    } catch (err) {
+      console.error('Error fetching reels:', err)
+      setError('Failed to load reels')
+    } finally {
+      setLoading(false)
     }
-  }
-
-  const handlePrevReel = () => {
-    if (currentReelIndex > 0) {
-      setCurrentReelIndex(prev => prev - 1)
-    }
-  }
-
-  // Touch/swipe handlers for mobile
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.targetTouches[0].clientY)
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientY)
-  }
-
-  const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return
-    
-    const distance = touchStart - touchEnd
-    const isUpSwipe = distance > 50
-    const isDownSwipe = distance < -50
-
-    if (isUpSwipe) {
-      handleNextReel()
-    } else if (isDownSwipe) {
-      handlePrevReel()
-    }
-  }
-
-  // Keyboard navigation
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'ArrowUp' || e.key === ' ') {
-      e.preventDefault()
-      handlePrevReel()
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      handleNextReel()
-    }
-  }
+  }, [])
 
   useEffect(() => {
+    if (authLoading) return
+    if (isAuthenticated) {
+      fetchReels()
+    } else {
+      setLoading(false)
+      setError('Please login to view reels')
+    }
+  }, [isAuthenticated, authLoading, fetchReels])
+
+  // Track which reel is in view for autoplay
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root || reels.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.6) return
+          const index = Number((entry.target as HTMLElement).dataset.index)
+          if (!Number.isNaN(index)) {
+            setActiveIndex(index)
+          }
+        })
+      },
+      { root, threshold: [0.6] },
+    )
+
+    itemRefs.current.forEach((el) => {
+      if (el) observer.observe(el)
+    })
+
+    return () => observer.disconnect()
+  }, [reels])
+
+  // Keyboard: up/down scroll between reels
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (selectedPostId) return
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      e.preventDefault()
+
+      const nextIndex =
+        e.key === 'ArrowDown'
+          ? Math.min(activeIndex + 1, reels.length - 1)
+          : Math.max(activeIndex - 1, 0)
+
+      itemRefs.current[nextIndex]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [currentReelIndex])
+  }, [activeIndex, reels.length, selectedPostId])
+
+  const handleLike = async (postId: string) => {
+    try {
+      const response = await fetch(`/api/posts/${postId}/like`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setReels((prev) =>
+          prev.map((post) =>
+            post._id === postId
+              ? {
+                  ...post,
+                  isLiked: data.data.isLiked,
+                  likeCount: data.data.likeCount,
+                }
+              : post,
+          ),
+        )
+      }
+    } catch (err) {
+      console.error('Error liking reel:', err)
+    }
+  }
+
+  const handleShare = async (post: Post) => {
+    const url = `${window.location.origin}/?post=${post._id}`
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Reel',
+          text: post.content || 'Check out this reel',
+          url,
+        })
+      } else {
+        await navigator.clipboard.writeText(url)
+      }
+    } catch (err) {
+      // User cancelled share — ignore
+      if ((err as Error)?.name !== 'AbortError') {
+        console.error('Share failed:', err)
+      }
+    }
+  }
+
+  const selectedPost = selectedPostId
+    ? reels.find((p) => p._id === selectedPostId)
+    : null
+
+  if (authLoading || loading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-black">
+        <div className="loading-spinner" />
+      </div>
+    )
+  }
+
+  if (error && reels.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-black text-white px-6 text-center">
+        <Video className="h-12 w-12 text-gray-500 mb-4" />
+        <p className="text-lg font-medium mb-2">{error}</p>
+        {isAuthenticated && (
+          <button
+            type="button"
+            onClick={fetchReels}
+            className="mt-2 px-4 py-2 rounded-full bg-white text-black text-sm font-medium"
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  if (reels.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-black text-white px-6 text-center">
+        <Video className="h-12 w-12 text-gray-500 mb-4" />
+        <p className="text-lg font-medium mb-1">No reels yet</p>
+        <p className="text-sm text-gray-400">
+          Video posts from your feed will show up here. Create a post with a video to get started.
+        </p>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-black">
-      {/* Reels Container */}
-      <div 
-        ref={containerRef}
-        className="relative h-screen pt-16 overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        {/* Current Reel */}
-        <div className="h-full flex items-center justify-center">
-          <VerticalReelCard 
-            reel={reels[currentReelIndex]} 
-            isActive={true}
-          />
-        </div>
+    <div className="h-full bg-black relative">
+      <div ref={containerRef} className="reel-container">
+        {reels.map((post, index) => (
+          <div
+            key={post._id}
+            ref={(el) => {
+              itemRefs.current[index] = el
+            }}
+            data-index={index}
+            className="reel-item"
+          >
+            <ReelCard
+              post={post}
+              isActive={index === activeIndex && !selectedPostId}
+              onLike={() => handleLike(post._id)}
+              onComment={() => setSelectedPostId(post._id)}
+              onShare={() => handleShare(post)}
+            />
+          </div>
+        ))}
+      </div>
 
-        {/* Progress Indicator */}
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 flex space-x-1">
-          {reels.map((_, index) => (
+      {reels.length <= 12 && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex space-x-1 z-30 pointer-events-none">
+          {reels.map((post, index) => (
             <div
-              key={index}
+              key={post._id}
               className={`h-1 rounded-full transition-all duration-300 ${
-                index === currentReelIndex 
-                  ? 'w-8 bg-white' 
-                  : 'w-2 bg-white bg-opacity-30'
+                index === activeIndex ? 'w-8 bg-white' : 'w-2 bg-white/30'
               }`}
             />
           ))}
         </div>
+      )}
 
-        {/* Loading Indicator */}
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="loading-spinner"></div>
-          </div>
-        )}
-      </div>
+      <CommentModal
+        isOpen={!!selectedPostId}
+        onClose={() => setSelectedPostId(null)}
+        postId={selectedPostId || ''}
+        commentCount={selectedPost?.commentCount}
+        onCommentAdded={() => {
+          if (!selectedPostId) return
+          setReels((prev) =>
+            prev.map((post) =>
+              post._id === selectedPostId
+                ? { ...post, commentCount: (post.commentCount || 0) + 1 }
+                : post,
+            ),
+          )
+        }}
+      />
     </div>
   )
 }
-
-interface VerticalReelCardProps {
-  reel: any
-  isActive: boolean
-}
-
-function VerticalReelCard({ reel, isActive }: VerticalReelCardProps) {
-  const [isLiked, setIsLiked] = useState(reel.isLiked)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isMuted, setIsMuted] = useState(true)
-  const [likes, setLikes] = useState(reel.likes)
-  const [isFollowing, setIsFollowing] = useState(reel.isFollowing)
-  const videoRef = useRef<HTMLVideoElement>(null)
-
-  useEffect(() => {
-    if (videoRef.current) {
-      if (isActive && isPlaying) {
-        videoRef.current.play()
-      } else {
-        videoRef.current.pause()
-      }
-    }
-  }, [isActive, isPlaying])
-
-  const handleLike = () => {
-    setIsLiked(!isLiked)
-    setLikes(isLiked ? likes - 1 : likes + 1)
-  }
-
-  const handleFollow = () => {
-    setIsFollowing(!isFollowing)
-  }
-
-  const togglePlay = () => {
-    setIsPlaying(!isPlaying)
-  }
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted
-      setIsMuted(!isMuted)
-    }
-  }
-
-  const handleVideoClick = () => {
-    togglePlay()
-  }
-
-  return (
-    <div className="relative w-full h-full max-w-sm mx-auto">
-      {/* Video */}
-      <div className="relative w-full h-full bg-black rounded-xl overflow-hidden">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          loop
-          muted={isMuted}
-          onClick={handleVideoClick}
-          onLoadedMetadata={() => {
-            if (isActive) {
-              setIsPlaying(true)
-            }
-          }}
-        >
-          <source src={reel.video} type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
-
-        {/* Play/Pause Overlay */}
-        {!isPlaying && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="bg-black bg-opacity-50 rounded-full p-4">
-              <Play className="h-8 w-8 text-white fill-white" />
-            </div>
-          </div>
-        )}
-
-        {/* Content Overlay */}
-        <div className="absolute inset-0 flex flex-col justify-between p-4">
-          {/* Top Section */}
-          <div className="flex justify-between items-start">
-            {/* Music Info */}
-            <div className="flex items-center space-x-2 bg-black bg-opacity-30 rounded-full px-3 py-1">
-              <Music className="h-4 w-4 text-white" />
-              <span className="text-white text-sm font-medium truncate">
-                {reel.music || 'Original Sound'}
-              </span>
-            </div>
-
-            {/* More Options */}
-            <button className="p-2 bg-black bg-opacity-30 rounded-full">
-              <MoreHorizontal className="h-5 w-5 text-white" />
-            </button>
-          </div>
-
-          {/* Bottom Section */}
-          <div className="flex justify-between items-end">
-            {/* Left Side - User Info & Caption */}
-            <div className="flex-1 pr-4">
-              {/* User Info */}
-              <div className="flex items-center space-x-3 mb-3">
-                <img
-                  src={reel.user.avatar}
-                  alt={reel.user.name}
-                  className="h-12 w-12 rounded-full object-cover border-2 border-white"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center space-x-1">
-                    <h3 className="font-semibold text-white">{reel.user.name}</h3>
-                    {reel.user.isVerified && (
-                      <span className="text-blue-400">✓</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-200">@{reel.user.username}</p>
-                </div>
-                <button
-                  onClick={handleFollow}
-                  className={`px-4 py-1 rounded-full text-sm font-medium transition-colors duration-200 ${
-                    isFollowing
-                      ? 'bg-gray-800 text-white hover:bg-gray-700'
-                      : 'bg-red-500 text-white hover:bg-red-600'
-                  }`}
-                >
-                  {isFollowing ? 'Following' : 'Follow'}
-                </button>
-              </div>
-
-              {/* Caption */}
-              <p className="text-white text-sm mb-3 line-clamp-3">{reel.caption}</p>
-
-              {/* Hashtags */}
-              {reel.hashtags && reel.hashtags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {reel.hashtags.map((hashtag: string, index: number) => (
-                    <span
-                      key={index}
-                      className="text-white text-sm font-medium bg-black bg-opacity-30 px-2 py-1 rounded"
-                    >
-                      #{hashtag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Right Side - Action Buttons */}
-            <div className="flex flex-col items-center space-y-6">
-              {/* Like Button */}
-              <button
-                onClick={handleLike}
-                className="flex flex-col items-center space-y-1"
-              >
-                <div className={`p-3 rounded-full transition-colors duration-200 ${
-                  isLiked ? 'bg-red-500' : 'bg-black bg-opacity-30'
-                }`}>
-                  <Heart className={`h-6 w-6 ${isLiked ? 'fill-white text-white' : 'text-white'}`} />
-                </div>
-                <span className="text-white text-xs font-medium">
-                  {formatNumber(likes)}
-                </span>
-              </button>
-
-              {/* Comment Button */}
-              <button className="flex flex-col items-center space-y-1">
-                <div className="p-3 bg-black bg-opacity-30 rounded-full">
-                  <MessageCircle className="h-6 w-6 text-white" />
-                </div>
-                <span className="text-white text-xs font-medium">
-                  {formatNumber(reel.comments)}
-                </span>
-              </button>
-
-              {/* Share Button */}
-              <button className="flex flex-col items-center space-y-1">
-                <div className="p-3 bg-black bg-opacity-30 rounded-full">
-                  <Share2 className="h-6 w-6 text-white" />
-                </div>
-                <span className="text-white text-xs font-medium">
-                  {formatNumber(reel.shares)}
-                </span>
-              </button>
-
-              {/* Mute Button */}
-              <button
-                onClick={toggleMute}
-                className="p-3 bg-black bg-opacity-30 rounded-full"
-              >
-                {isMuted ? (
-                  <VolumeX className="h-6 w-6 text-white" />
-                ) : (
-                  <Volume2 className="h-6 w-6 text-white" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Time Stamp */}
-        <div className="absolute top-4 right-4">
-          <span className="text-white text-sm bg-black bg-opacity-30 px-2 py-1 rounded">
-            {formatTimeAgo(reel.createdAt)}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-} 

@@ -495,6 +495,7 @@ export default function ProfilePage() {
           coverPhoto={profileUser.coverPhoto}
           avatar={profileUser.avatar}
           name={`${profileUser.firstName} ${profileUser.lastName}`}
+          username={profileUser.username}
           canEdit
           uploadingCover={uploadingCover}
           onCoverChange={handleCoverUpload}
@@ -509,53 +510,48 @@ export default function ProfilePage() {
         />
 
         <div className="max-w-4xl mx-auto px-3 sm:px-4 pb-6 sm:pb-8">
-          <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-6 md:pl-32 lg:pl-36">
-            {/* Profile Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2 sm:gap-4">
-                  <div className="min-w-0">
-                    <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 truncate">
-                      {profileUser.firstName} {profileUser.lastName}
-                    </h1>
-                    <p className="text-sm sm:text-base text-gray-600">@{profileUser.username}</p>
-                  </div>
-
-                  {/* Stats — next to name */}
-                  <div className="flex items-center gap-3 sm:gap-5 md:gap-6 shrink-0">
-                    <div className="text-center">
-                      <div className="text-lg sm:text-xl font-bold text-gray-900">{formatNumber(profileUser.posts)}</div>
-                      <div className="text-xs sm:text-sm text-gray-600">Posts</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg sm:text-xl font-bold text-gray-900">{formatNumber(profileUser.followers)}</div>
-                      <div className="text-xs sm:text-sm text-gray-600">Followers</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg sm:text-xl font-bold text-gray-900">{formatNumber(profileUser.following)}</div>
-                      <div className="text-xs sm:text-sm text-gray-600">Following</div>
-                    </div>
+          <div className="flex flex-col gap-3">
+            {/* Stats (left) + Edit / Dashboard (right) */}
+            <div className="flex items-center justify-between gap-2 sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-5 md:gap-6 min-w-0">
+                <div className="text-center">
+                  <div className="text-base sm:text-xl font-bold text-gray-900">{formatNumber(profileUser.posts)}</div>
+                  <div className="text-[11px] sm:text-sm text-gray-600">Posts</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-base sm:text-xl font-bold text-gray-900">{formatNumber(profileUser.followers)}</div>
+                  <div className="text-[11px] sm:text-sm text-gray-600">
+                    {profileUser.isPrivate ? 'Friends' : 'Followers'}
                   </div>
                 </div>
-
-                <div className="flex items-center flex-wrap gap-2">
-                  <button
-                    onClick={() => router.push('/profile/edit')}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 flex items-center space-x-2"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                    <span>Edit Profile</span>
-                  </button>
-                  <NextLink
-                    href="/dashboard"
-                    className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200 flex items-center space-x-2"
-                  >
-                    <LayoutDashboard className="h-4 w-4" />
-                    <span>Dashboard</span>
-                  </NextLink>
+                <div className="text-center">
+                  <div className="text-base sm:text-xl font-bold text-gray-900">{formatNumber(profileUser.following)}</div>
+                  <div className="text-[11px] sm:text-sm text-gray-600">Following</div>
                 </div>
               </div>
-              <p className="text-gray-700 mt-2 max-w-2xl">{profileUser.bio}</p>
+
+              <div className="flex items-center flex-wrap justify-end gap-2 shrink-0">
+                <NextLink
+                  href="/dashboard"
+                  className="px-3 sm:px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200 flex items-center space-x-1.5 sm:space-x-2 text-sm"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span>Dashboard</span>
+                </NextLink>
+                <button
+                  type="button"
+                  onClick={() => router.push('/profile/edit')}
+                  className="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  aria-label="Edit Profile"
+                  title="Edit Profile"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <p className="text-gray-700 max-w-2xl">{profileUser.bio}</p>
 
               {/* Professional Info */}
               {(profileUser.profession || profileUser.company || profileUser.jobTitle) && (
@@ -746,6 +742,22 @@ export default function ProfilePage() {
                   onSave={() => handleSave(post._id)}
                   onComment={() => handleComment(post._id)}
                   onShare={() => handleShare(post._id)}
+                  onUpdated={(updated) => {
+                    setProfilePosts((prev) =>
+                      prev.map((p) => (p._id === updated._id ? { ...p, ...updated } : p)),
+                    )
+                    setTaggedPosts((prev) =>
+                      prev.map((p) => (p._id === updated._id ? { ...p, ...updated } : p)),
+                    )
+                    setSavedPosts((prev) =>
+                      prev.map((p) => (p._id === updated._id ? { ...p, ...updated } : p)),
+                    )
+                  }}
+                  onDeleted={(postId) => {
+                    setProfilePosts((prev) => prev.filter((p) => p._id !== postId))
+                    setTaggedPosts((prev) => prev.filter((p) => p._id !== postId))
+                    setSavedPosts((prev) => prev.filter((p) => p._id !== postId))
+                  }}
                 />
               </div>
             ))}

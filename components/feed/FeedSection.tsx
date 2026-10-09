@@ -74,6 +74,42 @@ interface MediaFile {
   type: 'image' | 'video'
   url: string
   thumbnail?: string
+  duration?: number
+}
+
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
+const MAX_VIDEO_SIZE_BYTES = 1024 * 1024 * 1024 // 1GB
+const MAX_VIDEO_DURATION_SECONDS = 60 * 60 // 1 hour
+
+function getVideoDuration(file: File, objectUrl: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.muted = true
+    video.playsInline = true
+
+    const cleanup = () => {
+      video.removeAttribute('src')
+      video.load()
+    }
+
+    video.onloadedmetadata = () => {
+      const duration = video.duration
+      cleanup()
+      if (!Number.isFinite(duration) || duration <= 0) {
+        reject(new Error('Could not read video duration'))
+        return
+      }
+      resolve(duration)
+    }
+
+    video.onerror = () => {
+      cleanup()
+      reject(new Error('Could not load video'))
+    }
+
+    video.src = objectUrl
+  })
 }
 
 export default function FeedSection() {
@@ -139,60 +175,91 @@ export default function FeedSection() {
     }
   }, [])
 
-  // Handle file uploads
-  const handleFileUpload = (files: FileList | null, type: 'image' | 'video') => {
-    if (!files) return
+  // Handle file uploads (videos/reels: max 1 hour, up to 1GB)
+  const handleFileUpload = async (files: FileList | null, type: 'image' | 'video') => {
+    if (!files || files.length === 0) return
 
-    const newFiles: MediaFile[] = []
-    
-    Array.from(files).forEach(file => {
-      // Validate file type
+    setError('')
+    const accepted: MediaFile[] = []
+
+    for (const file of Array.from(files)) {
       if (type === 'image' && !file.type.startsWith('image/')) {
         setError('Please select valid image files')
-        return
+        continue
       }
       if (type === 'video' && !file.type.startsWith('video/')) {
         setError('Please select valid video files')
-        return
+        continue
       }
 
-      // Validate file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        setError('File size must be less than 10MB')
-        return
+      if (type === 'image' && file.size > MAX_IMAGE_SIZE_BYTES) {
+        setError('Image size must be less than 10MB')
+        continue
+      }
+
+      if (type === 'video' && file.size > MAX_VIDEO_SIZE_BYTES) {
+        setError('Video size must be less than 1GB')
+        continue
       }
 
       const url = URL.createObjectURL(file)
-      const mediaFile: MediaFile = {
-        file,
-        type,
-        url
-      }
+      const mediaFile: MediaFile = { file, type, url }
 
-      // Generate thumbnail for videos
       if (type === 'video') {
-        const video = document.createElement('video')
-        video.src = url
-        video.currentTime = 1
-        video.addEventListener('loadeddata', () => {
-          const canvas = document.createElement('canvas')
-          canvas.width = video.videoWidth
-          canvas.height = video.videoHeight
-          const ctx = canvas.getContext('2d')
-          ctx?.drawImage(video, 0, 0)
-          const thumbnailUrl = canvas.toDataURL('image/jpeg')
-          mediaFile.thumbnail = thumbnailUrl
-        })
+        try {
+          const duration = await getVideoDuration(file, url)
+          if (duration > MAX_VIDEO_DURATION_SECONDS) {
+            URL.revokeObjectURL(url)
+            setError('Video cannot be longer than 1 hour')
+            continue
+          }
+          mediaFile.duration = duration
+
+          // Thumbnail from ~1s (or mid-point for short clips)
+          await new Promise<void>((resolve) => {
+            const video = document.createElement('video')
+            video.src = url
+            video.muted = true
+            video.playsInline = true
+            video.currentTime = Math.min(1, Math.max(0.1, duration / 2))
+            video.addEventListener('seeked', () => {
+              try {
+                const canvas = document.createElement('canvas')
+                canvas.width = video.videoWidth || 320
+                canvas.height = video.videoHeight || 568
+                canvas.getContext('2d')?.drawImage(video, 0, 0)
+                mediaFile.thumbnail = canvas.toDataURL('image/jpeg')
+              } catch {
+                // thumbnail optional
+              }
+              resolve()
+            }, { once: true })
+            video.addEventListener('error', () => resolve(), { once: true })
+          })
+        } catch {
+          URL.revokeObjectURL(url)
+          setError('Could not read this video. Try another file (MP4/WebM).')
+          continue
+        }
       }
 
-      newFiles.push(mediaFile)
-    })
-
-    setMediaFiles(prev => [...prev, ...newFiles])
-    if (newFiles.length > 0) {
-      setBackgroundStyle(null)
+      accepted.push(mediaFile)
     }
-    setError('')
+
+    if (accepted.length === 0) return
+
+    // Reels: keep a single video so the post maps cleanly to the Reels feed
+    if (type === 'video') {
+      setMediaFiles((prev) => {
+        prev.filter((m) => m.type === 'video').forEach((m) => URL.revokeObjectURL(m.url))
+        const images = prev.filter((m) => m.type === 'image')
+        return [...images, accepted[0]]
+      })
+    } else {
+      setMediaFiles((prev) => [...prev, ...accepted])
+    }
+
+    setBackgroundStyle(null)
   }
 
   // Remove media file
@@ -627,6 +694,11 @@ export default function FeedSection() {
                   {mediaFiles.length > 0 && (
                     <div className="space-y-3">
                       <h4 className="font-medium text-gray-700">Media ({mediaFiles.length})</h4>
+                      {mediaFiles.some((m) => m.type === 'video') && (
+                        <p className="text-xs text-gray-500">
+                          Video posts appear in Reels. Max length: 1 hour.
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-3">
                         {mediaFiles.map((mediaFile, index) => (
                           <div key={index} className="relative group">
@@ -643,7 +715,14 @@ export default function FeedSection() {
                                 controls
                               />
                             )}
+                            {mediaFile.type === 'video' && mediaFile.duration != null && (
+                              <span className="absolute bottom-2 left-2 text-[10px] font-medium text-white bg-black/60 px-1.5 py-0.5 rounded">
+                                {Math.floor(mediaFile.duration / 60)}:
+                                {String(Math.floor(mediaFile.duration % 60)).padStart(2, '0')}
+                              </span>
+                            )}
                             <button
+                              type="button"
                               onClick={() => removeMediaFile(index)}
                               className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                             >
@@ -692,10 +771,14 @@ export default function FeedSection() {
                         type="file"
                         accept="image/*"
                         multiple
-                        onChange={(e) => handleFileUpload(e.target.files, 'image')}
+                        onChange={(e) => {
+                          void handleFileUpload(e.target.files, 'image')
+                          e.target.value = ''
+                        }}
                         className="hidden"
                       />
                       <button
+                        type="button"
                         onClick={() => fileInputRef.current?.click()}
                         className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                         title="Add photos"
@@ -703,19 +786,23 @@ export default function FeedSection() {
                         <Image className="h-5 w-5" />
                       </button>
 
-                      {/* Video Upload */}
+                      {/* Reel / Video Upload (max 1 hour) */}
                       <input
                         ref={videoInputRef}
                         type="file"
-                        accept="video/*"
-                        multiple
-                        onChange={(e) => handleFileUpload(e.target.files, 'video')}
+                        accept="video/mp4,video/webm,video/quicktime,video/*"
+                        onChange={(e) => {
+                          void handleFileUpload(e.target.files, 'video')
+                          e.target.value = ''
+                        }}
                         className="hidden"
                       />
                       <button
+                        type="button"
                         onClick={() => videoInputRef.current?.click()}
                         className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="Add video"
+                        title="Add reel / video (max 1 hour)"
+                        aria-label="Add reel or video, maximum 1 hour"
                       >
                         <Video className="h-5 w-5" />
                       </button>
@@ -805,6 +892,14 @@ export default function FeedSection() {
                   onSave={() => handleSavePost(post._id)}
                   onComment={() => handleComment(post._id)}
                   onShare={() => handleShare(post._id)}
+                  onUpdated={(updated) => {
+                    setPosts((prev) =>
+                      prev.map((p) => (p._id === updated._id ? { ...p, ...updated } : p)),
+                    )
+                  }}
+                  onDeleted={(postId) => {
+                    setPosts((prev) => prev.filter((p) => p._id !== postId))
+                  }}
                 />
               </div>
             ))}

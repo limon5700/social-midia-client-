@@ -145,11 +145,18 @@ video {
 
 /* Reels specific styles */
 .reel-container {
+  height: 100%;
+  overflow-y: scroll;
+  overscroll-behavior-y: contain;
   scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 .reel-item {
+  height: 100%;
   scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 /* Smooth video transitions */

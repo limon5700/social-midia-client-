@@ -1,14 +1,17 @@
 'use client'
 
-import { useState, Fragment } from 'react'
-import { 
-  Heart, 
-  MessageCircle, 
-  Share2, 
-  Bookmark, 
+import { useState, useEffect, useRef, Fragment } from 'react'
+import {
+  Heart,
+  MessageCircle,
+  Share2,
+  Bookmark,
   MoreHorizontal,
   MapPin,
-  Play
+  Play,
+  Pencil,
+  Trash2,
+  X,
 } from 'lucide-react'
 import { Post } from '@/types'
 import { formatNumber, formatTimeAgo } from '@/lib/utils'
@@ -16,6 +19,7 @@ import { getBackgroundPreviewStyle, resolveBackgroundStyle } from '@/lib/postBac
 import Link from 'next/link'
 import CommentModal from '../comments/CommentModal'
 import PrivacyIcon from '../common/PrivacyIcon'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface PostCardProps {
   post: Post
@@ -23,6 +27,8 @@ interface PostCardProps {
   onSave?: () => void
   onComment?: () => void
   onShare?: () => void
+  onUpdated?: (post: Post) => void
+  onDeleted?: (postId: string) => void
 }
 
 function renderContentWithLinks(content: string) {
@@ -56,12 +62,56 @@ function renderContentWithLinks(content: string) {
   })
 }
 
-export default function PostCard({ post, onLike, onSave, onComment, onShare }: PostCardProps) {
+export default function PostCard({
+  post,
+  onLike,
+  onSave,
+  onComment,
+  onShare,
+  onUpdated,
+  onDeleted,
+}: PostCardProps) {
+  const { user } = useAuth()
   const [isLiked, setIsLiked] = useState(post.isLiked)
   const [isSaved, setIsSaved] = useState(post.isSaved)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [showAllImages, setShowAllImages] = useState(false)
   const [showComments, setShowComments] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [editContent, setEditContent] = useState(post.content || '')
+  const [editPrivacy, setEditPrivacy] = useState(post.privacy || 'public')
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  const isOwnPost = Boolean(
+    user?.id &&
+      post.author?._id &&
+      String(user.id) === String(post.author._id),
+  )
+
+  useEffect(() => {
+    setIsLiked(post.isLiked)
+    setIsSaved(post.isSaved)
+    setLikeCount(post.likeCount)
+    setEditContent(post.content || '')
+    setEditPrivacy(post.privacy || 'public')
+  }, [post.isLiked, post.isSaved, post.likeCount, post.content, post.privacy])
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
 
   const handleLike = () => {
     if (onLike) {
@@ -88,6 +138,77 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
     }
   }
 
+  const openEdit = () => {
+    setEditContent(post.content || '')
+    setEditPrivacy(post.privacy || 'public')
+    setActionError('')
+    setMenuOpen(false)
+    setShowEditModal(true)
+  }
+
+  const openDelete = () => {
+    setActionError('')
+    setMenuOpen(false)
+    setShowDeleteConfirm(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (actionLoading) return
+    setActionLoading(true)
+    setActionError('')
+
+    try {
+      const response = await fetch(`/api/posts/${post._id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: editContent,
+          privacy: editPrivacy,
+        }),
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        onUpdated?.(data.data.post)
+        setShowEditModal(false)
+      } else {
+        setActionError(data.message || 'Failed to update post')
+      }
+    } catch (err) {
+      console.error('Edit post error:', err)
+      setActionError('Failed to update post')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (actionLoading) return
+    setActionLoading(true)
+    setActionError('')
+
+    try {
+      const response = await fetch(`/api/posts/${post._id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setShowDeleteConfirm(false)
+        onDeleted?.(post._id)
+      } else {
+        setActionError(data.message || 'Failed to delete post')
+      }
+    } catch (err) {
+      console.error('Delete post error:', err)
+      setActionError('Failed to delete post')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const hasMedia = Boolean(post.media && post.media.length > 0)
   const resolvedBackground = !hasMedia && post.backgroundStyle?.id
     ? resolveBackgroundStyle(post.backgroundStyle.id, post.backgroundStyle)
@@ -102,14 +223,14 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
       <span className="text-sm text-gray-500 font-normal truncate">
         {' '}
         with{' '}
-        {post.taggedUsers.map((user, index) => (
-          <Fragment key={user._id}>
+        {post.taggedUsers.map((tagged, index) => (
+          <Fragment key={tagged._id}>
             {index > 0 && (index === post.taggedUsers!.length - 1 ? ' and ' : ', ')}
             <Link
-              href={`/profile/${user._id}`}
+              href={`/profile/${tagged._id}`}
               className="font-medium text-gray-700 hover:underline"
             >
-              {user.firstName} {user.lastName}
+              {tagged.firstName} {tagged.lastName}
             </Link>
           </Fragment>
         ))}
@@ -118,98 +239,60 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
   }
 
   const renderMedia = () => {
-    if (!post.media || post.media.length === 0) {
-      return null
-    }
+    if (!post.media || post.media.length === 0) return null
 
-    const images = post.media.filter(item => item.type === 'image')
-    const videos = post.media.filter(item => item.type === 'video')
+    const images = post.media.filter((m) => m.type === 'image' || m.type === 'gif')
+    const videos = post.media.filter((m) => m.type === 'video')
 
-    if (videos.length > 0) {
-      return (
-        <div className="relative">
-          <video
-            src={videos[0].url}
-            controls
-            preload="metadata"
-            className="w-full rounded-lg max-h-72 sm:max-h-96 object-cover"
-            poster={videos[0].thumbnail || "https://via.placeholder.com/600x400?text=Video"}
-            onError={(e) => {
-              console.error('Video failed to load:', videos[0].url)
-              e.currentTarget.style.display = 'none'
-              // Show error message
-              const errorDiv = document.createElement('div')
-              errorDiv.className = 'w-full h-48 bg-gray-200 rounded-lg flex items-center justify-center text-gray-500'
-              errorDiv.textContent = 'Video could not be loaded'
-              e.currentTarget.parentNode?.appendChild(errorDiv)
-            }}
-          >
-            <source src={videos[0].url} type="video/mp4" />
-            <source src={videos[0].url} type="video/webm" />
-            <source src={videos[0].url} type="video/ogg" />
-            Your browser does not support the video tag.
-          </video>
-          {videos.length > 1 && (
-            <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm">
-              +{videos.length - 1} more videos
-            </div>
-          )}
-        </div>
-      )
-    }
+    return (
+      <div className="mb-3 space-y-2">
+        {videos.map((video, index) => (
+          <div key={`video-${index}`} className="relative rounded-lg overflow-hidden bg-black">
+            <video
+              src={video.url}
+              poster={video.thumbnail}
+              controls
+              playsInline
+              className="w-full max-h-[70vh] object-contain bg-black"
+            />
+          </div>
+        ))}
 
-    if (images.length > 0) {
-      const displayImages = showAllImages ? images : images.slice(0, 4)
-      
-      return (
-        <div className="relative">
-          <div className={`grid gap-1 rounded-lg overflow-hidden ${
-            images.length === 1 ? 'grid-cols-1' :
-            images.length === 2 ? 'grid-cols-2' :
-            images.length === 3 ? 'grid-cols-2' :
-            'grid-cols-2'
-          }`}>
-            {displayImages.map((image, index) => (
-              <div key={index} className="relative">
-                <img
-                  src={image.url}
-                  alt={`Post content ${index + 1}`}
-                  className="w-full h-48 object-cover"
-                  onError={(e) => {
-                    console.error('Image failed to load:', image.url)
-                    e.currentTarget.src = 'https://via.placeholder.com/600x400?text=Image+Not+Found'
-                  }}
-                />
-                {index === 3 && images.length > 4 && !showAllImages && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                    <span className="text-white font-bold text-lg">
-                      +{images.length - 4}
-                    </span>
-                  </div>
+        {images.length === 1 && (
+          <img
+            src={images[0].url}
+            alt="Post media"
+            className="w-full rounded-lg object-cover max-h-[70vh]"
+          />
+        )}
+
+        {images.length > 1 && (
+          <div className={`grid gap-1 ${images.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+            {(showAllImages ? images : images.slice(0, 4)).map((image, index) => (
+              <div key={`img-${index}`} className="relative aspect-square overflow-hidden rounded-lg">
+                <img src={image.url} alt="" className="w-full h-full object-cover" />
+                {!showAllImages && index === 3 && images.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllImages(true)}
+                    className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-semibold"
+                  >
+                    +{images.length - 4}
+                  </button>
                 )}
               </div>
             ))}
           </div>
-          {images.length > 4 && !showAllImages && (
-            <button
-              onClick={() => setShowAllImages(true)}
-              className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white px-3 py-1 rounded-full text-sm"
-            >
-              View all {images.length} photos
-            </button>
-          )}
-        </div>
-      )
-    }
-
-    return null
+        )}
+      </div>
+    )
   }
 
   return (
-    <div className="post-card">
+    <div className="feed-card">
       {/* Post Header */}
-      <div className="flex items-start justify-between gap-2 mb-3 sm:mb-4 min-w-0">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <Link href={`/profile/${post.author._id}`} className="flex-shrink-0">
             {post.author.avatar ? (
               <img
@@ -240,6 +323,7 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
                 <PrivacyIcon privacy={post.privacy} className="text-gray-400" />
               )}
               <span className="shrink-0">{formatTimeAgo(new Date(post.createdAt))}</span>
+              {post.isEdited && <span className="text-gray-400">· Edited</span>}
               {post.location && (
                 <>
                   <span className="hidden sm:inline">•</span>
@@ -252,9 +336,41 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
             </div>
           </div>
         </div>
-        <button type="button" className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full shrink-0">
-          <MoreHorizontal className="h-5 w-5 text-gray-500" />
-        </button>
+
+        {isOwnPost && (
+          <div className="relative shrink-0" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full"
+              aria-label="Post options"
+              aria-expanded={menuOpen}
+            >
+              <MoreHorizontal className="h-5 w-5 text-gray-500" />
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={openEdit}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={openDelete}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Post Content */}
@@ -275,12 +391,13 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
             </p>
           </div>
         ) : (
-          <p className="text-gray-900 whitespace-pre-wrap">
-            {renderContentWithLinks(post.content)}
-          </p>
+          post.content && (
+            <p className="text-gray-900 whitespace-pre-wrap">
+              {renderContentWithLinks(post.content)}
+            </p>
+          )
         )}
-        
-        {/* Hashtags */}
+
         {post.hashtags && post.hashtags.length > 0 && !useStyledContent && (
           <div className="mt-2 flex flex-wrap gap-1">
             {post.hashtags.map((hashtag, index) => (
@@ -292,10 +409,8 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
         )}
       </div>
 
-      {/* Post Media */}
       {renderMedia()}
 
-      {/* Post Stats */}
       <div className="py-2 sm:py-3 border-b border-gray-100">
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-500">
           <span>{formatNumber(post.likeCount)} likes</span>
@@ -305,7 +420,6 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
         </div>
       </div>
 
-      {/* Post Actions */}
       <div className="grid grid-cols-4 gap-0.5 sm:gap-1 py-1 sm:py-2">
         <button
           type="button"
@@ -354,6 +468,112 @@ export default function PostCard({ post, onLike, onSave, onComment, onShare }: P
         postId={post._id}
         commentCount={post.commentCount}
       />
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-[120] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-xl shadow-xl max-h-[90dvh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <h3 className="font-semibold text-lg">Edit Post</h3>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              {actionError && (
+                <div className="p-2.5 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+                  {actionError}
+                </div>
+              )}
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={5}
+                maxLength={1000}
+                placeholder="What's on your mind?"
+                className="w-full border border-gray-200 rounded-lg p-3 text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <div className="flex items-center justify-between gap-3">
+                <select
+                  value={editPrivacy}
+                  onChange={(e) =>
+                    setEditPrivacy(
+                      e.target.value as 'public' | 'friends' | 'friends_of_friends' | 'private',
+                    )
+                  }
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white"
+                >
+                  <option value="public">Public</option>
+                  <option value="friends">Friends</option>
+                  <option value="friends_of_friends">Friends of friends</option>
+                  <option value="private">Only me</option>
+                </select>
+                <span className="text-xs text-gray-400">{editContent.length}/1000</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 px-4 py-3 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                disabled={actionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {actionLoading ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-xl shadow-xl p-5">
+            <h3 className="font-semibold text-lg mb-2">Delete post?</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This post will be removed from your profile and feed. This cannot be undone.
+            </p>
+            {actionError && (
+              <div className="mb-3 p-2.5 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+                {actionError}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                disabled={actionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {actionLoading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
-} 
+}
