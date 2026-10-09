@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const apiBase = process.env.API_URL || 'http://127.0.0.1:3001'
+const apiBase = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'https://social-midia-server.onrender.com';
 
 const nextConfig = {
   images: {
